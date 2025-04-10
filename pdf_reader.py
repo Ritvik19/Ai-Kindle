@@ -9,7 +9,7 @@ import os
 # !! IMPORTANT: Replace with your actual AI model details !!
 AI_API_ENDPOINT = "YOUR_AI_API_ENDPOINT_HERE" # e.g., https://api.example.com/v1/chat/completions
 AI_API_KEY = os.environ.get("YOUR_AI_API_KEY") # Best practice: use environment variables
-
+st.set_page_config(layout="wide", page_title="AI PDF Reader")
 if not AI_API_KEY:
     st.warning("AI API Key not found. Please set the YOUR_AI_API_KEY environment variable.", icon="⚠️")
     # You might want to add st.stop() here if the key is essential for core functionality
@@ -71,7 +71,7 @@ def ask_ai(context_text, query):
     try:
         response = requests.post(AI_API_ENDPOINT, headers=headers, json=payload, timeout=60)
         response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-        
+
         # --- Parse the response (adjust based on your AI model's output format) ---
         # Example for OpenAI-like structure:
         # result = response.json()
@@ -91,8 +91,6 @@ def ask_ai(context_text, query):
 
 
 # --- Streamlit App ---
-
-st.set_page_config(layout="wide", page_title="AI PDF Reader")
 st.title("📄 AI-Powered PDF Reader & Notetaker")
 
 # --- Initialize Session State ---
@@ -113,53 +111,34 @@ if 'pdf_file_name' not in st.session_state:
     st.session_state.pdf_file_name = ""
 
 
-# --- Sidebar for Upload and Notes ---
-with st.sidebar:
-    st.header("Upload PDF")
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+# --- PDF Upload Section ---
+st.header("Upload PDF")
+uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
-    if uploaded_file is not None:
-        # Check if it's a new file
-        if uploaded_file.name != st.session_state.get('pdf_file_name', ''):
-            st.session_state.pdf_file_name = uploaded_file.name
-            st.info("Processing PDF...")
-            file_bytes = uploaded_file.getvalue()
-            st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(file_bytes)
-            st.session_state.current_page = 0
-            st.session_state.notes = [] # Reset notes for new PDF
-            st.session_state.selected_text = ""
-            st.session_state.ai_response = ""
-            st.success("PDF Processed!")
-            st.rerun() # Rerun to update the main view immediately
-        else:
-            st.write(f"Loaded: `{st.session_state.pdf_file_name}`")
-
-    st.divider()
-
-    # --- Notes Section ---
-    st.header("📝 My Notes")
-    if st.session_state.notes:
-        for i, note in enumerate(st.session_state.notes):
-            st.text_area(f"Note {i+1}", value=note, height=100, key=f"note_{i}", disabled=True)
-
-        # --- Export Notes ---
-        notes_text = "\n\n---\n\n".join(st.session_state.notes)
-        st.download_button(
-            label="📥 Export Notes to TXT",
-            data=notes_text,
-            file_name=f"{st.session_state.pdf_file_name}_notes.txt" if st.session_state.pdf_file_name else "notes.txt",
-            mime="text/plain",
-        )
+if uploaded_file is not None:
+    # Check if it's a new file
+    if uploaded_file.name != st.session_state.get('pdf_file_name', ''):
+        st.session_state.pdf_file_name = uploaded_file.name
+        st.info("Processing PDF...")
+        file_bytes = uploaded_file.getvalue()
+        st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(file_bytes)
+        st.session_state.current_page = 0
+        st.session_state.notes = [] # Reset notes for new PDF
+        st.session_state.selected_text = ""
+        st.session_state.ai_response = ""
+        st.success("PDF Processed!")
+        st.rerun() # Rerun to update the main view immediately
     else:
-        st.write("No notes saved yet.")
+        st.write(f"Loaded: `{st.session_state.pdf_file_name}`")
 
+st.divider()
 
 # --- Main Area for PDF Display and Interaction ---
 if st.session_state.pdf_images:
     total_pages = len(st.session_state.pdf_images)
 
     # --- Page Navigation ---
-    col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+    col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
     with col_nav1:
         if st.button("⬅️ Previous Page", disabled=(st.session_state.current_page == 0)):
             st.session_state.current_page -= 1
@@ -177,20 +156,22 @@ if st.session_state.pdf_images:
 
     st.divider()
 
-    # --- PDF Page Display and Text Interaction ---
+    # --- PDF Page Display and Text Interaction in Three Columns ---
     current_page_index = st.session_state.current_page
-    col1, col2 = st.columns(2)
+    col_image, col_text, col_interact = st.columns([1, 1, 1]) # Adjust widths as needed
 
-    with col1:
+    with col_image:
         st.subheader("📄 PDF View")
         st.image(st.session_state.pdf_images[current_page_index], caption=f"Page {current_page_index + 1}", use_column_width=True)
 
-    with col2:
-        st.subheader("💬 Interact with Text")
+    with col_text:
+        st.subheader("📖 Page Text")
         page_text = st.session_state.pdf_texts[current_page_index]
+        st.text_area("Extracted Text (Copy from here)", value=page_text, height=400, key=f"text_disp_{current_page_index}", disabled=True)
 
-        # Display extracted text (users can copy from here)
-        st.text_area("Extracted Text (Copy from here)", value=page_text, height=250, key=f"text_disp_{current_page_index}", disabled=True)
+
+    with col_interact:
+        st.subheader("💬 Interaction")
 
         # Area for user to paste selected text
         st.session_state.selected_text = st.text_area(
@@ -201,19 +182,12 @@ if st.session_state.pdf_images:
         )
 
         # --- Actions for Selected Text ---
-        col_act1, col_act2 = st.columns(2)
-        with col_act1:
-            if st.button("📌 Save Selected Text as Note", disabled=not st.session_state.selected_text):
-                note_content = f"**Highlight from Page {current_page_index + 1}:**\n{st.session_state.selected_text}"
-                st.session_state.notes.append(note_content)
-                st.success("Text saved as a note!")
-                st.session_state.selected_text = "" # Clear selection after saving
-                st.rerun() # Update sidebar immediately
-
-        with col_act2:
-           # Placeholder, functionality handled below query input
-           pass
-
+        if st.button("📌 Save Selected Text as Note", disabled=not st.session_state.selected_text):
+            note_content = f"**Highlight from Page {current_page_index + 1}:**\n{st.session_state.selected_text}"
+            st.session_state.notes.append(note_content)
+            st.success("Text saved as a note!")
+            st.session_state.selected_text = "" # Clear selection after saving
+            st.rerun() # Update immediately
 
         st.divider()
 
@@ -237,7 +211,27 @@ if st.session_state.pdf_images:
                     # Optionally clear parts of the state after saving
                     # st.session_state.ai_response = ""
                     # st.session_state.selected_text = ""
-                    st.rerun() # Update sidebar immediately
+                    st.rerun() # Update immediately
+
+    st.divider()
+
+    # --- Display Notes in Four Columns ---
+    if st.session_state.notes:
+        st.subheader("📝 My Notes")
+        note_cols = st.columns(4)
+        for i, note in enumerate(st.session_state.notes):
+            note_cols[i % 4].text_area(f"Note {i+1}", value=note, height=150, key=f"note_{i}", disabled=True)
+
+        # --- Export Notes ---
+        notes_text = "\n\n---\n\n".join(st.session_state.notes)
+        st.download_button(
+            label="📥 Export Notes to TXT",
+            data=notes_text,
+            file_name=f"{st.session_state.pdf_file_name}_notes.txt" if st.session_state.pdf_file_name else "notes.txt",
+            mime="text/plain",
+        )
+    else:
+        st.info("No notes saved yet.")
 
 else:
-    st.info("Please upload a PDF file using the sidebar to get started.")
+    st.info("Please upload a PDF file to get started.")
