@@ -4,13 +4,16 @@ from PIL import Image
 import io
 import requests
 import os
+import re
+from tqdm.auto import trange
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # --- Configuration ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_KWARGS = dict(temperature=0, max_tokens=None, api_key=GEMINI_API_KEY)
 LEARN_LM = ChatGoogleGenerativeAI(model="learnlm-1.5-pro-experimental", **GEMINI_KWARGS)
-PROMPT = """
+GEMINI_2 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", **GEMINI_KWARGS)
+RAG_PROMPT = """
 **Task:** Answer questions based on a given context.
 
 **Additional Details:**
@@ -40,6 +43,24 @@ The output should be in markdown format for the question asked. The answer shoul
 Question: {query}
 """.strip()
 
+REFORMAT_PROMPT = """
+Reformat the given text as markdown.
+
+The goal is to convert the provided text into valid markdown format. Preserve the original content and structure as much as possible while applying appropriate markdown syntax for headings, lists, emphasis, links, and other common elements.
+
+# Output Format
+
+The output should be a single string containing the reformatted text in markdown format.
+
+```markdown
+The reformatted text goes here.
+```
+
+# Text to Reformat
+{text}
+"""
+# --- Streamlit Configuration ---
+
 st.set_page_config(layout="wide", page_title="AI PDF Reader")
 
 
@@ -51,11 +72,13 @@ def pdf_to_images_and_text(file_bytes):
     texts = []
     try:
         pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-        for page_num in range(len(pdf_document)):
+        for page_num in trange(len(pdf_document)):
             page = pdf_document.load_page(page_num)
 
             # Extract text
-            texts.append(page.get_text("text"))
+            page_text = page.get_text("text")
+            reformatted_text = reformat_text(page_text)
+            texts.append(reformatted_text)
 
             # Render page to an image (pixmap)
             pix = page.get_pixmap(dpi=150) # Increase DPI for better quality if needed
@@ -70,13 +93,23 @@ def pdf_to_images_and_text(file_bytes):
         st.error(f"Error processing PDF: {e}")
         return [], []
 
+def reformat_text(text):
+    messages = [{"role": "user", "content": REFORMAT_PROMPT.format(text=text)}]
+    try:
+        response = GEMINI_2.invoke(messages).content
+        response = re.findall(r"```markdown\n(.*?)\n```", response, re.DOTALL)[0]
+        return response
+    except Exception as e:
+        st.error(f"Error during text reformatting: {e}")
+        return text
+
 def ask_ai(context, query):
     """
     Placeholder function to interact with your AI model.
     Replace this with your specific AI model API call.
     """
     st.info("Asking the AI...", icon="🤖")
-    messages = [{"role": "user", "content": PROMPT.format(context=context, query=query)}]
+    messages = [{"role": "user", "content": RAG_PROMPT.format(context=context, query=query)}]
     try:
         response = LEARN_LM.invoke(messages).content
         return response
