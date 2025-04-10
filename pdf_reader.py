@@ -249,7 +249,12 @@ if st.session_state.pdf_images:
         st.subheader("📝 My Notes")
         note_cols = st.columns(4)
         for i, note in enumerate(st.session_state.notes):
-            note_cols[i % 4].text_area(f"Note {i+1}", value=note, height=150, key=f"note_{i}")
+            with note_cols[i % 4]:
+                st.text_area(f"Note {i+1}", value=note, height=150, key=f"note_{i}")
+                if st.button(f"❌ Delete Note {i+1}", key=f"delete_note_{i}"):
+                    st.session_state.notes.pop(i)
+                    st.success(f"Note {i+1} deleted!")
+                    st.rerun()  # Rerun to update the UI immediately
 
         # --- Export Notes ---
         notes_text = "\n\n---\n\n".join(st.session_state.notes)
