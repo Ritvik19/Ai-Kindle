@@ -8,7 +8,7 @@ import re
 import time
 from tqdm.auto import trange
 from langchain_google_genai import ChatGoogleGenerativeAI
-from prompts import RAG_PROMPT, REFORMAT_PROMPT
+from prompts import RAG_PROMPT, REFORMAT_PROMPT, USER_GUIDE
 
 # --- Configuration ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -134,6 +134,8 @@ if 'pdf_file_name' not in st.session_state:
 # --- PDF Upload Section ---
 st.sidebar.header("Upload PDF")
 uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type="pdf")
+with st.sidebar.expander("User Guide"):
+    st.write(USER_GUIDE)
 
 if uploaded_file is not None:
     # Check if it's a new file
