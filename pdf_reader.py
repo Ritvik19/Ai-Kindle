@@ -73,12 +73,34 @@ def ask_ai(context, query):
     Placeholder function to interact with your AI model.
     Replace this with your specific AI model API call.
     """
-    if context.strip() == "":  # If context is empty, use all text from all pages
+    
+    if context.strip().startswith("@"):  # If context starts with @, process page numbers
+        try:
+            pages = context[1:].split(",")  # Remove @ and split by commas
+            selected_texts = []
+            selected_pages = []  # To track selected page numbers
+            for page in pages:
+                if "-" in page:  # Handle ranges (e.g., 3-5)
+                    start, end = map(int, page.split("-"))
+                    selected_texts.extend(st.session_state.pdf_texts[start - 1:end])
+                    selected_pages.extend(range(start, end + 1))
+                else:  # Handle single page (e.g., 1)
+                    selected_texts.append(st.session_state.pdf_texts[int(page) - 1])
+                    selected_pages.append(int(page))
+            context = "\n\n".join(selected_texts)
+            page_info = f"Selected pages: {', '.join(map(str, selected_pages))}"
+        except (ValueError, IndexError) as e:
+            st.error(f"Invalid page specification: {e}")
+            return f"Error: Invalid page specification. Details: {e}"
+    elif context.strip() == "":  # If context is empty, use all text from all pages
         context = "\n\n".join(st.session_state.pdf_texts)
+        page_info = "Using all pages"
+    else:  # If context is provided directly
+        page_info = "Using selected text"
 
     model = LEARN_LM if len(context.split()) < 20_000 else GEMINI_2
-    
-    st.info("Asking the AI...", icon="🤖")
+
+    st.info(f"Asking the AI... ({page_info})", icon="🤖")
     messages = [{"role": "user", "content": RAG_PROMPT.format(context=context, query=query)}]
     try:
         response = model.invoke(messages).content
