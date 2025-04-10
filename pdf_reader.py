@@ -6,17 +6,11 @@ import time
 import fitz
 import requests
 import streamlit as st
-from langchain_google_genai import ChatGoogleGenerativeAI
 from PIL import Image
 from tqdm.auto import trange
 
 from prompts import RAG_PROMPT, REFORMAT_PROMPT, USER_GUIDE
-
-# --- Configuration ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_KWARGS = dict(temperature=0, max_tokens=None, api_key=GEMINI_API_KEY)
-LEARN_LM = ChatGoogleGenerativeAI(model="learnlm-1.5-pro-experimental", **GEMINI_KWARGS)
-GEMINI_2 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", **GEMINI_KWARGS)
+from models import LEARN_LM, GEMINI_2
 
 # --- Streamlit Configuration ---
 st.set_page_config(layout="wide", page_title="AI Kindle")
