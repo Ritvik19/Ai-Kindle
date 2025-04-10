@@ -15,6 +15,7 @@ from models import LEARN_LM, GEMINI_2
 # --- Streamlit Configuration ---
 st.set_page_config(layout="wide", page_title="AI Kindle")
 
+
 # --- Helper Functions ---
 @st.cache_data
 def pdf_to_images_and_text(file_bytes, reformat_enabled):
@@ -33,10 +34,10 @@ def pdf_to_images_and_text(file_bytes, reformat_enabled):
             texts.append(processed_text)
 
             # Render page to an image (pixmap)
-            pix = page.get_pixmap(dpi=150) # Increase DPI for better quality if needed
+            pix = page.get_pixmap(dpi=150)  # Increase DPI for better quality if needed
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='PNG')
+            img.save(img_byte_arr, format="PNG")
             images.append(img_byte_arr.getvalue())
 
         pdf_document.close()
@@ -44,6 +45,7 @@ def pdf_to_images_and_text(file_bytes, reformat_enabled):
     except Exception as e:
         st.error(f"Error processing PDF: {e}")
         return [], []
+
 
 def reformat_text(text):
     messages = [{"role": "user", "content": REFORMAT_PROMPT.format(text=text)}]
@@ -61,17 +63,18 @@ def reformat_text(text):
                 time.sleep(retry_delay)
             else:
                 print(f"Error during text reformatting (attempt {attempt + 1}): {e}")
-            
+
             if attempt == max_retries - 1:  # If it's the last attempt, return the original text
                 print("Max retries reached. Returning original text.")
                 return text
+
 
 def ask_ai(context, query):
     """
     Placeholder function to interact with your AI model.
     Replace this with your specific AI model API call.
     """
-    
+
     if context.strip().startswith("@"):  # If context starts with @, process page numbers
         try:
             pages = context[1:].split(",")  # Remove @ and split by commas
@@ -80,7 +83,7 @@ def ask_ai(context, query):
             for page in pages:
                 if "-" in page:  # Handle ranges (e.g., 3-5)
                     start, end = map(int, page.split("-"))
-                    selected_texts.extend(st.session_state.pdf_texts[start - 1:end])
+                    selected_texts.extend(st.session_state.pdf_texts[start - 1 : end])
                     selected_pages.extend(range(start, end + 1))
                 else:  # Handle single page (e.g., 1)
                     selected_texts.append(st.session_state.pdf_texts[int(page) - 1])
@@ -113,21 +116,21 @@ st.title("📔 AI-Kindle")
 
 # --- Initialize Session State ---
 # Stores data across reruns
-if 'pdf_images' not in st.session_state:
+if "pdf_images" not in st.session_state:
     st.session_state.pdf_images = []
-if 'pdf_texts' not in st.session_state:
+if "pdf_texts" not in st.session_state:
     st.session_state.pdf_texts = []
-if 'current_page' not in st.session_state:
+if "current_page" not in st.session_state:
     st.session_state.current_page = 0
-if 'notes' not in st.session_state:
-    st.session_state.notes = [] # List to store notes (highlighted text or AI responses)
-if 'selected_text' not in st.session_state:
+if "notes" not in st.session_state:
+    st.session_state.notes = []  # List to store notes (highlighted text or AI responses)
+if "selected_text" not in st.session_state:
     st.session_state.selected_text = ""
-if 'ai_response' not in st.session_state:
+if "ai_response" not in st.session_state:
     st.session_state.ai_response = ""
-if 'last_ai_query' not in st.session_state:
+if "last_ai_query" not in st.session_state:
     st.session_state.last_ai_query = ""
-if 'pdf_file_name' not in st.session_state:
+if "pdf_file_name" not in st.session_state:
     st.session_state.pdf_file_name = ""
 
 
@@ -141,17 +144,19 @@ with st.sidebar.expander("User Guide"):
 
 if uploaded_file is not None:
     # Check if it's a new file
-    if uploaded_file.name != st.session_state.get('pdf_file_name', ''):
+    if uploaded_file.name != st.session_state.get("pdf_file_name", ""):
         st.session_state.pdf_file_name = uploaded_file.name
         st.info("Processing PDF...")
         file_bytes = uploaded_file.getvalue()
-        st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(file_bytes, reformat_enabled_checkbox)
+        st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(
+            file_bytes, reformat_enabled_checkbox
+        )
         st.session_state.current_page = 0
-        st.session_state.notes = [] # Reset notes for new PDF
+        st.session_state.notes = []  # Reset notes for new PDF
         st.session_state.selected_text = ""
         st.session_state.ai_response = ""
         st.success("PDF Processed!")
-        st.rerun() # Rerun to update the main view immediately
+        st.rerun()  # Rerun to update the main view immediately
     else:
         st.sidebar.write(f"Loaded: `{st.session_state.pdf_file_name}`")
 
@@ -161,7 +166,7 @@ if st.session_state.pdf_images:
 
     # --- PDF Page Display and Text Interaction in Three Columns ---
     current_page_index = st.session_state.current_page
-    col_image, col_text, col_interact = st.columns([1, 1, 1]) # Adjust widths as needed
+    col_image, col_text, col_interact = st.columns([1, 1, 1])  # Adjust widths as needed
 
     with col_image:
         st.subheader("📄 PDF View")
@@ -170,10 +175,17 @@ if st.session_state.pdf_images:
         col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
         with col_nav1:
             if st.button("1 ⬅️", disabled=current_page_index == 0):
-                st.session_state.current_page = 0 
+                st.session_state.current_page = 0
                 st.rerun()
         with col_nav2:
-            page_num_input = st.number_input("Go to page:", min_value=1, max_value=total_pages, value=st.session_state.current_page + 1, step=1, label_visibility="collapsed")
+            page_num_input = st.number_input(
+                "Go to page:",
+                min_value=1,
+                max_value=total_pages,
+                value=st.session_state.current_page + 1,
+                step=1,
+                label_visibility="collapsed",
+            )
             if page_num_input != st.session_state.current_page + 1:
                 st.session_state.current_page = page_num_input - 1
                 st.rerun()
@@ -185,8 +197,13 @@ if st.session_state.pdf_images:
     with col_text:
         st.subheader("📖 Page Text")
         page_text = st.session_state.pdf_texts[current_page_index]
-        st.text_area("Extracted Text (Copy from here)", value=page_text, height=500, key=f"text_disp_{current_page_index}", disabled=True)
-
+        st.text_area(
+            "Extracted Text (Copy from here)",
+            value=page_text,
+            height=500,
+            key=f"text_disp_{current_page_index}",
+            disabled=True,
+        )
 
     with col_interact:
         st.subheader("💬 Interaction")
@@ -195,17 +212,19 @@ if st.session_state.pdf_images:
         st.session_state.selected_text = st.text_area(
             "Paste selected text here:",
             height=150,
-            key="text_selection_area", # Give it a key to help preserve state if needed
-            value=st.session_state.selected_text # Persist value across simple interactions
+            key="text_selection_area",  # Give it a key to help preserve state if needed
+            value=st.session_state.selected_text,  # Persist value across simple interactions
         )
 
         # --- Actions for Selected Text ---
         if st.button("📌 Save Selected Text as Note", disabled=not st.session_state.selected_text):
-            note_content = f"Highlight from Page {current_page_index + 1}\n\n---\n\n{st.session_state.selected_text}\n\n==="
+            note_content = (
+                f"Highlight from Page {current_page_index + 1}\n\n---\n\n{st.session_state.selected_text}\n\n==="
+            )
             st.session_state.notes.append(note_content)
             st.success("Text saved as a note!")
-            st.session_state.selected_text = "" # Clear selection after saving
-            st.rerun() # Update immediately
+            st.session_state.selected_text = ""  # Clear selection after saving
+            st.rerun()  # Update immediately
 
         st.divider()
 
@@ -220,13 +239,14 @@ if st.session_state.pdf_images:
             # Call the AI function
             st.session_state.ai_response = ask_ai(st.session_state.selected_text, ai_query)
             # --- MODIFICATION: Set flag to show dialog immediately ---
-            if st.session_state.ai_response: # Only try to show dialog if we got a response (even an error one)
+            if st.session_state.ai_response:  # Only try to show dialog if we got a response (even an error one)
                 st.session_state.show_response_dialog = True
-                st.rerun() # Rerun immediately to open the dialog
+                st.rerun()  # Rerun immediately to open the dialog
             # If ask_ai failed internally and returned None/empty, the dialog won't open
 
     # --- Dialog for Full AI Response (This section remains the same) ---
     if st.session_state.get("show_response_dialog", False) and st.session_state.ai_response:
+
         @st.dialog("Full AI Response")
         def show_full_response():
             # Display the response in an *editable* text area
@@ -234,7 +254,7 @@ if st.session_state.pdf_images:
                 label="Edit AI Response:",
                 value=st.session_state.ai_response,
                 height=400,
-                key="dialog_response_text_area"
+                key="dialog_response_text_area",
             )
 
             col_dialog_save, col_dialog_close = st.columns(2)
@@ -242,17 +262,24 @@ if st.session_state.pdf_images:
             with col_dialog_save:
                 # Button to save the potentially edited response from the dialog
                 is_error_response = st.session_state.ai_response.startswith("Error:")
-                query_for_note = st.session_state.get('last_ai_query', 'Unknown Query')
+                query_for_note = st.session_state.get("last_ai_query", "Unknown Query")
 
-                if st.button("💾 Save Edited Response", use_container_width=True, disabled=is_error_response, key="dialog_save_button"):
-                    edited_response = st.session_state.get('dialog_response_text_area', st.session_state.ai_response)
+                if st.button(
+                    "💾 Save Edited Response",
+                    use_container_width=True,
+                    disabled=is_error_response,
+                    key="dialog_save_button",
+                ):
+                    edited_response = st.session_state.get("dialog_response_text_area", st.session_state.ai_response)
                     context_desc = "Selected Text"
                     if st.session_state.selected_text.strip().startswith("@"):
                         context_desc = f"Pages {st.session_state.selected_text.strip()[1:]}"
                     elif not st.session_state.selected_text.strip():
                         context_desc = "All Pages"
 
-                    note_content = f"AI Query ({context_desc})\nQuery: {query_for_note}\n\n---\n\n{edited_response}\n\n==="
+                    note_content = (
+                        f"AI Query ({context_desc})\nQuery: {query_for_note}\n\n---\n\n{edited_response}\n\n==="
+                    )
                     st.session_state.notes.append(note_content)
                     st.success("Edited AI response saved as a note!")
 
@@ -261,7 +288,7 @@ if st.session_state.pdf_images:
                     st.rerun()
 
             with col_dialog_close:
-                 # Button to close the dialog
+                # Button to close the dialog
                 if st.button("Close Dialog", use_container_width=True, key="dialog_close_button"):
                     st.session_state.show_response_dialog = False
                     # Optionally clear dialog text area state here if needed
@@ -289,7 +316,11 @@ if st.session_state.pdf_images:
         st.download_button(
             label="📥 Export Notes to TXT",
             data=notes_text,
-            file_name=f"{st.session_state.pdf_file_name.replace('.', '_')}_notes.txt" if st.session_state.pdf_file_name else "notes.txt",
+            file_name=(
+                f"{st.session_state.pdf_file_name.replace('.', '_')}_notes.txt"
+                if st.session_state.pdf_file_name
+                else "notes.txt"
+            ),
             mime="text/plain",
         )
     else:
