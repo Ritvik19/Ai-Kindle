@@ -131,6 +131,8 @@ if 'selected_text' not in st.session_state:
     st.session_state.selected_text = ""
 if 'ai_response' not in st.session_state:
     st.session_state.ai_response = ""
+if 'last_ai_query' not in st.session_state:
+    st.session_state.last_ai_query = ""
 if 'pdf_file_name' not in st.session_state:
     st.session_state.pdf_file_name = ""
 
@@ -215,53 +217,61 @@ if st.session_state.pdf_images:
 
         # --- AI Query Section ---
         st.subheader("🤖 Ask AI about Selected Text")
-        ai_query = st.text_input("Enter your question about the selected text:")
+        # Use a consistent key for the query input
+        ai_query = st.text_input("Enter your question about the selected text:", key="ai_query_input")
 
         if st.button("❓ Ask AI", disabled=not st.session_state.selected_text or not ai_query):
+            # Store the query before calling the AI
+            st.session_state.last_ai_query = ai_query
             # Call the AI function
             st.session_state.ai_response = ask_ai(st.session_state.selected_text, ai_query)
-            st.session_state.show_response_dialog = False # Show dialog for response
-            # No need to rerun here, response will display below
+            # --- MODIFICATION: Set flag to show dialog immediately ---
+            if st.session_state.ai_response: # Only try to show dialog if we got a response (even an error one)
+                st.session_state.show_response_dialog = True
+                st.rerun() # Rerun immediately to open the dialog
+            # If ask_ai failed internally and returned None/empty, the dialog won't open
 
-        # Display AI response if available
-        if st.session_state.ai_response:
-                st.text_area("AI Response Preview:", value=st.session_state.ai_response, height=100, key="ai_response_display_preview", disabled=True)
-
-                col_resp1, col_resp2 = st.columns(2)
-                with col_resp1:
-                    # --- Button to open the dialog ---
-                    if st.button("👁️ View Full Response", use_container_width=True):
-                        st.session_state.show_response_dialog = True
-                        st.rerun() # Rerun to make the dialog appear
-
-                with col_resp2:
-                    # --- Button to save the response ---
-                    # Only allow saving valid responses
-                    is_error_response = st.session_state.ai_response.startswith("Error:")
-                    if st.button("💾 Save AI Response", use_container_width=True, disabled=is_error_response):
-                        # Determine context for the note title
-                        context_desc = "Selected Text"
-                        if st.session_state.selected_text.strip().startswith("@"):
-                            context_desc = f"Pages {st.session_state.selected_text.strip()[1:]}"
-                        elif not st.session_state.selected_text.strip():
-                            context_desc = "All Pages"
-
-                        note_content = f"AI Query ({context_desc})\nQuery: {ai_query}\n\n---\n\n{st.session_state.ai_response}\n\n==="
-                        st.session_state.notes.append(note_content)
-                        st.success("AI response saved as a note!")
-                        st.session_state.show_response_dialog = False
-                        # Optionally clear parts of the state after saving
-                        # st.session_state.ai_response = ""
-                        # st.session_state.selected_text = ""
-                        st.rerun()
-
-    if st.session_state.get("show_response_dialog", False) and st.session_state.ai_response:    
+    # --- Dialog for Full AI Response (This section remains the same) ---
+    if st.session_state.get("show_response_dialog", False) and st.session_state.ai_response:
         @st.dialog("Full AI Response")
         def show_full_response():
-            st.text_area(label="ai_reponse", value=st.session_state.ai_response, height=400)
-            if st.button("Close Dialog"):
-                st.session_state.show_response_dialog = False
-                st.rerun() # Rerun to close the dialog
+            # Display the response in an *editable* text area
+            st.text_area(
+                label="Edit AI Response:",
+                value=st.session_state.ai_response,
+                height=400,
+                key="dialog_response_text_area"
+            )
+
+            col_dialog_save, col_dialog_close = st.columns(2)
+
+            with col_dialog_save:
+                # Button to save the potentially edited response from the dialog
+                is_error_response = st.session_state.ai_response.startswith("Error:")
+                query_for_note = st.session_state.get('last_ai_query', 'Unknown Query')
+
+                if st.button("💾 Save Edited Response", use_container_width=True, disabled=is_error_response, key="dialog_save_button"):
+                    edited_response = st.session_state.get('dialog_response_text_area', st.session_state.ai_response)
+                    context_desc = "Selected Text"
+                    if st.session_state.selected_text.strip().startswith("@"):
+                        context_desc = f"Pages {st.session_state.selected_text.strip()[1:]}"
+                    elif not st.session_state.selected_text.strip():
+                        context_desc = "All Pages"
+
+                    note_content = f"AI Query ({context_desc})\nQuery: {query_for_note}\n\n---\n\n{edited_response}\n\n==="
+                    st.session_state.notes.append(note_content)
+                    st.success("Edited AI response saved as a note!")
+
+                    st.session_state.show_response_dialog = False
+                    # Optionally clear state here if needed
+                    st.rerun()
+
+            with col_dialog_close:
+                 # Button to close the dialog
+                if st.button("Close Dialog", use_container_width=True, key="dialog_close_button"):
+                    st.session_state.show_response_dialog = False
+                    # Optionally clear dialog text area state here if needed
+                    st.rerun()
 
         # Call the dialog function to display it
         show_full_response()
