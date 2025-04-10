@@ -7,6 +7,7 @@ import os
 import re
 from tqdm.auto import trange
 from langchain_google_genai import ChatGoogleGenerativeAI
+from prompts import RAG_PROMPT, REFORMAT_PROMPT
 
 # --- Configuration ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -14,59 +15,10 @@ GEMINI_KWARGS = dict(temperature=0, max_tokens=None, api_key=GEMINI_API_KEY)
 LEARN_LM = ChatGoogleGenerativeAI(model="learnlm-1.5-pro-experimental", **GEMINI_KWARGS)
 GEMINI_2 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", **GEMINI_KWARGS)
 
-RAG_PROMPT = """
-**Task:** Answer questions based on a given context.
-
-**Additional Details:**
-- The context will be provided as a string.
-- Questions will be in natural language and require reasoning before providing an answer.
-- Answers should be formatted using markdown with appropriate headings, bullet points, tables, etc., as required by the question.
-
-# Steps
-
-1. **Understand the Context:** Read and comprehend the given context to extract relevant information.
-2. **Analyze the Question:** Break down the question into smaller parts if necessary. Identify what specific information is being asked for.
-3. **Reason and Infer:** Use logical reasoning and inference based on the context to derive the answer.
-4. **Format the Answer:** Structure the answer using markdown formatting, including headings, bullet points, tables, etc., as appropriate.
-
-# Output Format
-
-The output should be in markdown format for the question asked. The answer should be structured appropriately using bullet points, tables, or other markdown elements as necessary.
-
-# Notes
-- Always ensure that the answer is based on the given context. If the question cannot be answered from the provided context, clearly state "Cannot be determined from the given context."
-- Use tables sparingly and only when necessary to present complex data in a structured format.
-
-{context}
-
----
-
-Question: {query}
-""".strip()
-
-REFORMAT_PROMPT = """
-Reformat the given text as markdown.
-
-The goal is to convert the provided text into valid markdown format. Preserve the original content and structure as much as possible while applying appropriate markdown syntax for headings, lists, emphasis, links, and other common elements.
-
-# Output Format
-
-The output should be a single string containing the reformatted text in markdown format.
-
-```markdown
-The reformatted text goes here.
-```
-
-# Text to Reformat
-{text}
-"""
 # --- Streamlit Configuration ---
-
-st.set_page_config(layout="wide", page_title="AI PDF Reader")
-
+st.set_page_config(layout="wide", page_title="AI Kindle")
 
 # --- Helper Functions ---
-
 def pdf_to_images_and_text(file_bytes):
     """Extracts images and text from each page of a PDF."""
     images = []
@@ -98,10 +50,11 @@ def reformat_text(text):
     messages = [{"role": "user", "content": REFORMAT_PROMPT.format(text=text)}]
     try:
         response = GEMINI_2.invoke(messages).content
-        response = re.findall(r"```markdown\n(.*?)\n```", response, re.DOTALL)[0]
-        return response
+        extracted_response = re.findall(r"```markdown\n(.*?)\n```", response, re.DOTALL)[0]
+        return extracted_response
     except Exception as e:
-        st.error(f"Error during text reformatting: {e}")
+        print(f"Error during text reformatting: {e}")
+        print(response)
         return text
 
 def ask_ai(context, query):
@@ -120,7 +73,7 @@ def ask_ai(context, query):
 
 
 # --- Streamlit App ---
-st.title("📄 AI-Kindle")
+st.title("📔 AI-Kindle")
 
 # --- Initialize Session State ---
 # Stores data across reruns
@@ -141,8 +94,8 @@ if 'pdf_file_name' not in st.session_state:
 
 
 # --- PDF Upload Section ---
-st.header("Upload PDF")
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+st.sidebar.header("Upload PDF")
+uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type="pdf")
 
 if uploaded_file is not None:
     # Check if it's a new file
@@ -158,32 +111,11 @@ if uploaded_file is not None:
         st.success("PDF Processed!")
         st.rerun() # Rerun to update the main view immediately
     else:
-        st.write(f"Loaded: `{st.session_state.pdf_file_name}`")
-
-st.divider()
+        st.sidebar.write(f"Loaded: `{st.session_state.pdf_file_name}`")
 
 # --- Main Area for PDF Display and Interaction ---
 if st.session_state.pdf_images:
     total_pages = len(st.session_state.pdf_images)
-
-    # --- Page Navigation ---
-    col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
-    with col_nav1:
-        if st.button("⬅️ Previous Page", disabled=(st.session_state.current_page == 0)):
-            st.session_state.current_page -= 1
-            st.session_state.selected_text = "" # Clear selection on page change
-            st.session_state.ai_response = ""
-            st.rerun()
-    with col_nav2:
-        st.write(f"Page: **{st.session_state.current_page + 1} / {total_pages}**")
-    with col_nav3:
-        if st.button("Next Page ➡️", disabled=(st.session_state.current_page == total_pages - 1)):
-            st.session_state.current_page += 1
-            st.session_state.selected_text = "" # Clear selection on page change
-            st.session_state.ai_response = ""
-            st.rerun()
-
-    st.divider()
 
     # --- PDF Page Display and Text Interaction in Three Columns ---
     current_page_index = st.session_state.current_page
@@ -196,7 +128,7 @@ if st.session_state.pdf_images:
     with col_text:
         st.subheader("📖 Page Text")
         page_text = st.session_state.pdf_texts[current_page_index]
-        st.text_area("Extracted Text (Copy from here)", value=page_text, height=400, key=f"text_disp_{current_page_index}", disabled=True)
+        st.text_area("Extracted Text (Copy from here)", value=page_text, height=500, key=f"text_disp_{current_page_index}", disabled=True)
 
 
     with col_interact:
@@ -231,7 +163,7 @@ if st.session_state.pdf_images:
 
         # Display AI response if available
         if st.session_state.ai_response:
-            st.text_area("AI Response:", value=st.session_state.ai_response, height=150, key="ai_response_display", disabled=True)
+            st.text_area("AI Response:", value=st.session_state.ai_response, height=150, key="ai_response_display")
             if not st.session_state.ai_response.startswith("Error:"): # Only allow saving valid responses
                 if st.button("💾 Save AI Response as Note"):
                     note_content = f"AI Query (Page {current_page_index + 1})\nQuery: {ai_query}\n\n---\n\n{st.session_state.ai_response}\n\n==="
@@ -241,6 +173,25 @@ if st.session_state.pdf_images:
                     # st.session_state.ai_response = ""
                     # st.session_state.selected_text = ""
                     st.rerun() # Update immediately
+
+    st.divider()
+
+     # --- Page Navigation ---
+    col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
+    with col_nav1:
+        if st.button("⬅️ Previous Page", disabled=(st.session_state.current_page == 0)):
+            st.session_state.current_page -= 1
+            st.session_state.selected_text = "" # Clear selection on page change
+            st.session_state.ai_response = ""
+            st.rerun()
+    with col_nav2:
+        st.write(f"Page: **{st.session_state.current_page + 1} / {total_pages}**")
+    with col_nav3:
+        if st.button("Next Page ➡️", disabled=(st.session_state.current_page == total_pages - 1)):
+            st.session_state.current_page += 1
+            st.session_state.selected_text = "" # Clear selection on page change
+            st.session_state.ai_response = ""
+            st.rerun()
 
     st.divider()
 
