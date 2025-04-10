@@ -5,6 +5,7 @@ import io
 import requests
 import os
 import re
+import time
 from tqdm.auto import trange
 from langchain_google_genai import ChatGoogleGenerativeAI
 from prompts import RAG_PROMPT, REFORMAT_PROMPT
@@ -48,24 +49,39 @@ def pdf_to_images_and_text(file_bytes):
 
 def reformat_text(text):
     messages = [{"role": "user", "content": REFORMAT_PROMPT.format(text=text)}]
-    try:
-        response = GEMINI_2.invoke(messages).content
-        extracted_response = re.findall(r"```markdown\n(.*?)\n```", response, re.DOTALL)[0]
-        return extracted_response
-    except Exception as e:
-        print(f"Error during text reformatting: {e}")
-        print(response)
-        return text
+    max_retries = 3
+    retry_delay = 10
+
+    for attempt in range(max_retries):
+        try:
+            response = GEMINI_2.invoke(messages).content
+            extracted_response = re.findall(r"```markdown\n(.*?)\n```", response, re.DOTALL)[0]
+            return extracted_response
+        except Exception as e:
+            if "429" in str(e):  # Check if the error is a 429 Too Many Requests
+                print(f"429 error encountered. Retrying after {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(f"Error during text reformatting (attempt {attempt + 1}): {e}")
+            
+            if attempt == max_retries - 1:  # If it's the last attempt, return the original text
+                print("Max retries reached. Returning original text.")
+                return text
 
 def ask_ai(context, query):
     """
     Placeholder function to interact with your AI model.
     Replace this with your specific AI model API call.
     """
+    if context.strip() == "":  # If context is empty, use all text from all pages
+        context = "\n\n".join(st.session_state.pdf_texts)
+
+    model = LEARN_LM if len(context.split()) < 20_000 else GEMINI_2
+    
     st.info("Asking the AI...", icon="🤖")
     messages = [{"role": "user", "content": RAG_PROMPT.format(context=context, query=query)}]
     try:
-        response = LEARN_LM.invoke(messages).content
+        response = model.invoke(messages).content
         return response
     except Exception as e:
         st.error(f"An error occurred during AI interaction: {e}")
