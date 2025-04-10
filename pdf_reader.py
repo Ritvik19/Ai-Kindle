@@ -1,13 +1,15 @@
-import streamlit as st
-import fitz
-from PIL import Image
 import io
-import requests
 import os
 import re
 import time
-from tqdm.auto import trange
+
+import fitz
+import requests
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
+from PIL import Image
+from tqdm.auto import trange
+
 from prompts import RAG_PROMPT, REFORMAT_PROMPT, USER_GUIDE
 
 # --- Configuration ---
