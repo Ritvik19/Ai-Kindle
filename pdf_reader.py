@@ -1,19 +1,46 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import fitz
 from PIL import Image
 import io
-import requests # For generic API calls, replace with your AI SDK if needed
+import requests
 import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # --- Configuration ---
-# !! IMPORTANT: Replace with your actual AI model details !!
-AI_API_ENDPOINT = "YOUR_AI_API_ENDPOINT_HERE" # e.g., https://api.example.com/v1/chat/completions
-AI_API_KEY = os.environ.get("YOUR_AI_API_KEY") # Best practice: use environment variables
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_KWARGS = dict(temperature=0, max_tokens=None, api_key=GEMINI_API_KEY)
+LEARN_LM = ChatGoogleGenerativeAI(model="learnlm-1.5-pro-experimental", **GEMINI_KWARGS)
+PROMPT = """
+**Task:** Answer questions based on a given context.
+
+**Additional Details:**
+- The context will be provided as a string.
+- Questions will be in natural language and require reasoning before providing an answer.
+- Answers should be formatted using markdown with appropriate headings, bullet points, tables, etc., as required by the question.
+
+# Steps
+
+1. **Understand the Context:** Read and comprehend the given context to extract relevant information.
+2. **Analyze the Question:** Break down the question into smaller parts if necessary. Identify what specific information is being asked for.
+3. **Reason and Infer:** Use logical reasoning and inference based on the context to derive the answer.
+4. **Format the Answer:** Structure the answer using markdown formatting, including headings, bullet points, tables, etc., as appropriate.
+
+# Output Format
+
+The output should be in markdown format for the question asked. The answer should be structured appropriately using bullet points, tables, or other markdown elements as necessary.
+
+# Notes
+- Always ensure that the answer is based on the given context. If the question cannot be answered from the provided context, clearly state "Cannot be determined from the given context."
+- Use tables sparingly and only when necessary to present complex data in a structured format.
+
+{context}
+
+---
+
+Question: {query}
+""".strip()
+
 st.set_page_config(layout="wide", page_title="AI PDF Reader")
-if not AI_API_KEY:
-    st.warning("AI API Key not found. Please set the YOUR_AI_API_KEY environment variable.", icon="⚠️")
-    # You might want to add st.stop() here if the key is essential for core functionality
-    # Or allow users to enter it via st.text_input(type="password")
 
 
 # --- Helper Functions ---
@@ -43,51 +70,19 @@ def pdf_to_images_and_text(file_bytes):
         st.error(f"Error processing PDF: {e}")
         return [], []
 
-def ask_ai(context_text, query):
+def ask_ai(context, query):
     """
     Placeholder function to interact with your AI model.
     Replace this with your specific AI model API call.
     """
-    if not AI_API_KEY or not AI_API_ENDPOINT:
-         return "Error: AI API Key or Endpoint not configured."
-
-    st.info("Asking the AI...", icon="🤖") # Provide feedback
-
-    # --- Replace this section with your specific AI API call ---
-    headers = {
-        "Authorization": f"Bearer {AI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    # Example payload structure (adjust based on your AI model's requirements)
-    payload = {
-        "model": "your-model-name-here", # Specify the model if required by the API
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant analyzing PDF text."},
-            {"role": "user", "content": f"Based on the following text, answer the question:\n\nText:\n{context_text}\n\nQuestion:\n{query}"}
-        ],
-        # Add other parameters like temperature, max_tokens etc. if needed
-    }
-
+    st.info("Asking the AI...", icon="🤖")
+    messages = [{"role": "user", "content": PROMPT.format(context=context, query=query)}]
     try:
-        response = requests.post(AI_API_ENDPOINT, headers=headers, json=payload, timeout=60)
-        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-
-        # --- Parse the response (adjust based on your AI model's output format) ---
-        # Example for OpenAI-like structure:
-        # result = response.json()
-        # ai_response = result.get('choices', [{}])[0].get('message', {}).get('content', 'No response content found.')
-
-        # Example for a simpler JSON response:
-        ai_response = response.json().get("response", "Error: Could not parse AI response.") # Adjust the key 'response' as needed
-
-        return ai_response
-    except requests.exceptions.RequestException as e:
-        st.error(f"AI API call failed: {e}")
-        return f"Error: Failed to connect to AI service. Details: {e}"
+        response = LEARN_LM.invoke(messages).content
+        return response
     except Exception as e:
         st.error(f"An error occurred during AI interaction: {e}")
         return f"Error: An unexpected error occurred. Details: {e}"
-    # --- End of AI API call section ---
 
 
 # --- Streamlit App ---
