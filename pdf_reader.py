@@ -13,6 +13,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_KWARGS = dict(temperature=0, max_tokens=None, api_key=GEMINI_API_KEY)
 LEARN_LM = ChatGoogleGenerativeAI(model="learnlm-1.5-pro-experimental", **GEMINI_KWARGS)
 GEMINI_2 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", **GEMINI_KWARGS)
+
 RAG_PROMPT = """
 **Task:** Answer questions based on a given context.
 
@@ -119,7 +120,7 @@ def ask_ai(context, query):
 
 
 # --- Streamlit App ---
-st.title("📄 AI-Powered PDF Reader & Notetaker")
+st.title("📄 AI-Kindle")
 
 # --- Initialize Session State ---
 # Stores data across reruns
@@ -211,7 +212,7 @@ if st.session_state.pdf_images:
 
         # --- Actions for Selected Text ---
         if st.button("📌 Save Selected Text as Note", disabled=not st.session_state.selected_text):
-            note_content = f"**Highlight from Page {current_page_index + 1}:**\n{st.session_state.selected_text}"
+            note_content = f"Highlight from Page {current_page_index + 1}\n\n---\n\n{st.session_state.selected_text}\n\n==="
             st.session_state.notes.append(note_content)
             st.success("Text saved as a note!")
             st.session_state.selected_text = "" # Clear selection after saving
@@ -233,7 +234,7 @@ if st.session_state.pdf_images:
             st.text_area("AI Response:", value=st.session_state.ai_response, height=150, key="ai_response_display", disabled=True)
             if not st.session_state.ai_response.startswith("Error:"): # Only allow saving valid responses
                 if st.button("💾 Save AI Response as Note"):
-                    note_content = f"**AI Query (Page {current_page_index + 1}):**\n*Query:* {ai_query}\n*Context Text:*\n{st.session_state.selected_text}\n\n*AI Response:*\n{st.session_state.ai_response}"
+                    note_content = f"AI Query (Page {current_page_index + 1})\nQuery: {ai_query}\n\n---\n\n{st.session_state.ai_response}\n\n==="
                     st.session_state.notes.append(note_content)
                     st.success("AI response saved as a note!")
                     # Optionally clear parts of the state after saving
@@ -248,14 +249,14 @@ if st.session_state.pdf_images:
         st.subheader("📝 My Notes")
         note_cols = st.columns(4)
         for i, note in enumerate(st.session_state.notes):
-            note_cols[i % 4].text_area(f"Note {i+1}", value=note, height=150, key=f"note_{i}", disabled=True)
+            note_cols[i % 4].text_area(f"Note {i+1}", value=note, height=150, key=f"note_{i}")
 
         # --- Export Notes ---
         notes_text = "\n\n---\n\n".join(st.session_state.notes)
         st.download_button(
             label="📥 Export Notes to TXT",
             data=notes_text,
-            file_name=f"{st.session_state.pdf_file_name}_notes.txt" if st.session_state.pdf_file_name else "notes.txt",
+            file_name=f"{st.session_state.pdf_file_name.replace('.', '_')}_notes.txt" if st.session_state.pdf_file_name else "notes.txt",
             mime="text/plain",
         )
     else:
