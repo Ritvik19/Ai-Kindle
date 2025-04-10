@@ -22,19 +22,21 @@ GEMINI_2 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", **GEMINI_KWARGS)
 st.set_page_config(layout="wide", page_title="AI Kindle")
 
 # --- Helper Functions ---
-def pdf_to_images_and_text(file_bytes):
+@st.cache_data
+def pdf_to_images_and_text(file_bytes, reformat_enabled):
     """Extracts images and text from each page of a PDF."""
     images = []
     texts = []
     try:
         pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-        for page_num in trange(len(pdf_document)):
+        num_pages = len(pdf_document)
+        for page_num in trange(num_pages):
             page = pdf_document.load_page(page_num)
 
             # Extract text
             page_text = page.get_text("text")
-            reformatted_text = reformat_text(page_text)
-            texts.append(reformatted_text)
+            processed_text = reformat_text(page_text) if reformat_enabled else page_text
+            texts.append(processed_text)
 
             # Render page to an image (pixmap)
             pix = page.get_pixmap(dpi=150) # Increase DPI for better quality if needed
@@ -136,6 +138,8 @@ if 'pdf_file_name' not in st.session_state:
 # --- PDF Upload Section ---
 st.sidebar.header("Upload PDF")
 uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type="pdf")
+reformat_enabled_checkbox = st.sidebar.checkbox("Reformat Text (slower)", value=True)
+
 with st.sidebar.expander("User Guide"):
     st.write(USER_GUIDE)
 
@@ -145,7 +149,7 @@ if uploaded_file is not None:
         st.session_state.pdf_file_name = uploaded_file.name
         st.info("Processing PDF...")
         file_bytes = uploaded_file.getvalue()
-        st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(file_bytes)
+        st.session_state.pdf_images, st.session_state.pdf_texts = pdf_to_images_and_text(file_bytes, reformat_enabled_checkbox)
         st.session_state.current_page = 0
         st.session_state.notes = [] # Reset notes for new PDF
         st.session_state.selected_text = ""
@@ -165,7 +169,22 @@ if st.session_state.pdf_images:
 
     with col_image:
         st.subheader("📄 PDF View")
-        st.image(st.session_state.pdf_images[current_page_index], caption=f"Page {current_page_index + 1}", use_column_width=True)
+        st.image(st.session_state.pdf_images[current_page_index], use_column_width=True)
+        # --- Page Navigation ---
+        col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
+        with col_nav1:
+            if st.button("1 ⬅️", disabled=current_page_index == 0):
+                st.session_state.current_page = 0 
+                st.rerun()
+        with col_nav2:
+            page_num_input = st.number_input("Go to page:", min_value=1, max_value=total_pages, value=st.session_state.current_page + 1, step=1, label_visibility="collapsed")
+            if page_num_input != st.session_state.current_page + 1:
+                st.session_state.current_page = page_num_input - 1
+                st.rerun()
+        with col_nav3:
+            if st.button(f"➡️ {total_pages}", disabled=current_page_index == total_pages - 1):
+                st.session_state.current_page = total_pages - 1
+                st.rerun()
 
     with col_text:
         st.subheader("📖 Page Text")
@@ -201,39 +220,51 @@ if st.session_state.pdf_images:
         if st.button("❓ Ask AI", disabled=not st.session_state.selected_text or not ai_query):
             # Call the AI function
             st.session_state.ai_response = ask_ai(st.session_state.selected_text, ai_query)
+            st.session_state.show_response_dialog = False # Show dialog for response
             # No need to rerun here, response will display below
 
         # Display AI response if available
         if st.session_state.ai_response:
-            st.text_area("AI Response:", value=st.session_state.ai_response, height=150, key="ai_response_display")
-            if not st.session_state.ai_response.startswith("Error:"): # Only allow saving valid responses
-                if st.button("💾 Save AI Response as Note"):
-                    note_content = f"AI Query (Page {current_page_index + 1})\nQuery: {ai_query}\n\n---\n\n{st.session_state.ai_response}\n\n==="
-                    st.session_state.notes.append(note_content)
-                    st.success("AI response saved as a note!")
-                    # Optionally clear parts of the state after saving
-                    # st.session_state.ai_response = ""
-                    # st.session_state.selected_text = ""
-                    st.rerun() # Update immediately
+                st.text_area("AI Response Preview:", value=st.session_state.ai_response, height=100, key="ai_response_display_preview", disabled=True)
 
-    st.divider()
+                col_resp1, col_resp2 = st.columns(2)
+                with col_resp1:
+                    # --- Button to open the dialog ---
+                    if st.button("👁️ View Full Response", use_container_width=True):
+                        st.session_state.show_response_dialog = True
+                        st.rerun() # Rerun to make the dialog appear
 
-     # --- Page Navigation ---
-    col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
-    with col_nav1:
-        if st.button("⬅️ Previous Page", disabled=(st.session_state.current_page == 0)):
-            st.session_state.current_page -= 1
-            st.session_state.selected_text = "" # Clear selection on page change
-            st.session_state.ai_response = ""
-            st.rerun()
-    with col_nav2:
-        st.write(f"Page: **{st.session_state.current_page + 1} / {total_pages}**")
-    with col_nav3:
-        if st.button("Next Page ➡️", disabled=(st.session_state.current_page == total_pages - 1)):
-            st.session_state.current_page += 1
-            st.session_state.selected_text = "" # Clear selection on page change
-            st.session_state.ai_response = ""
-            st.rerun()
+                with col_resp2:
+                    # --- Button to save the response ---
+                    # Only allow saving valid responses
+                    is_error_response = st.session_state.ai_response.startswith("Error:")
+                    if st.button("💾 Save AI Response", use_container_width=True, disabled=is_error_response):
+                        # Determine context for the note title
+                        context_desc = "Selected Text"
+                        if st.session_state.selected_text.strip().startswith("@"):
+                            context_desc = f"Pages {st.session_state.selected_text.strip()[1:]}"
+                        elif not st.session_state.selected_text.strip():
+                            context_desc = "All Pages"
+
+                        note_content = f"AI Query ({context_desc})\nQuery: {ai_query}\n\n---\n\n{st.session_state.ai_response}\n\n==="
+                        st.session_state.notes.append(note_content)
+                        st.success("AI response saved as a note!")
+                        st.session_state.show_response_dialog = False
+                        # Optionally clear parts of the state after saving
+                        # st.session_state.ai_response = ""
+                        # st.session_state.selected_text = ""
+                        st.rerun()
+
+    if st.session_state.get("show_response_dialog", False) and st.session_state.ai_response:    
+        @st.dialog("Full AI Response")
+        def show_full_response():
+            st.text_area(label="ai_reponse", value=st.session_state.ai_response, height=400)
+            if st.button("Close Dialog"):
+                st.session_state.show_response_dialog = False
+                st.rerun() # Rerun to close the dialog
+
+        # Call the dialog function to display it
+        show_full_response()
 
     st.divider()
 
