@@ -112,7 +112,7 @@ def ask_ai(context, query):
 
 
 # --- Streamlit App ---
-st.title("📔 AI-Kindle")
+st.sidebar.title("📔 AI-Kindle")
 
 # --- Initialize Session State ---
 # Stores data across reruns
@@ -169,7 +169,7 @@ if st.session_state.pdf_images:
     col_image, col_text, col_interact = st.columns([1, 1, 1])  # Adjust widths as needed
 
     with col_image:
-        st.subheader("📄 PDF View")
+        # st.subheader("📄 PDF View")
         st.image(st.session_state.pdf_images[current_page_index], use_column_width=True)
         # --- Page Navigation ---
         col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 1])
@@ -195,7 +195,7 @@ if st.session_state.pdf_images:
                 st.rerun()
 
     with col_text:
-        st.subheader("📖 Page Text")
+        # st.subheader("📖 Page Text")
         page_text = st.session_state.pdf_texts[current_page_index]
         st.text_area(
             "Extracted Text (Copy from here)",
@@ -206,7 +206,7 @@ if st.session_state.pdf_images:
         )
 
     with col_interact:
-        st.subheader("💬 Interaction")
+        # st.subheader("💬 Interaction")
 
         # Area for user to paste selected text
         st.session_state.selected_text = st.text_area(
